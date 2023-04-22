@@ -7,6 +7,7 @@ import base58
 import binascii
 import os
 import math
+import struct
 # External imports
 import merkletools
 
@@ -170,14 +171,17 @@ def get_merkel_root(transactions):
     print(mt.get_leaf_count())
     mt.make_tree()
     return mt.get_merkle_root()
+
 def calculate_new_difficulty(old_target,old_time_mined,new_time_mined):
     time_diff=new_time_mined-old_time_mined
     ratio=float(time_diff)/float(Config.expected_time)
-    if ratio>4:
-        ratio=4
-    print(ratio)
-    new_target=round(int(old_target,16)*ratio)
-    new_target =(math.floor(math.log(new_target, 256)) + 1) * 0x1000000
-    print(new_target)
-    return str(hex(new_target))
-print(calculate_new_difficulty("0000f00000000000000000000000000000000000000000000000000000000000",100000,2000000))
+    if ratio>5:
+        ratio=5
+    if ratio<0.0001:
+        ratio=0.0001
+    new_target=str(hex(round(int(old_target,16)*ratio)))[2:]
+    missing=64-len(new_target)
+    new_target=("0"*missing)+new_target
+    return new_target
+def validate_block(block_hash,nonce,found_by,mined_at,transactions):
+    return 0
