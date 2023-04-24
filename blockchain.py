@@ -7,6 +7,7 @@ import base58
 import binascii
 import os
 import math
+import struct
 # External imports
 import merkletools
 
@@ -22,7 +23,7 @@ class Config:
     max_bytes=2000000
     expected_time=100*5*60
 block_template={
-        "header":{"lastBlockHash":"","created":0,"fees":0,"merkelRoot":"","version":"","target":"","nonce":0,"hash":"","next_block_hash":"","weight":0},
+        "header":{"lastBlockHash":"","created":round(time.time(),2),"fees":0,"merkleRoot":"","version":Config.VERSION,"target":"00f0000000000000000000000000000000000000000000000000000000000000","nonce":0,"hash":"","next_block_hash":"","weight":0},
         "body":{"transactions":[],"totalSent":0,"totalTransactions":0},
         "footer":{"minedBy":"","minedAt":0,"timeDifference":""}# Going to contain information about the blocks miner.
         }
@@ -149,7 +150,9 @@ def add_transaction_to_block(tx):
     Adds a transaction to the blocks body
     """
     block['body']['transactions'].append(tx)
-
+def dump_to_mempool(txs:list):
+    for a in txs:
+        mempool[a['txid']]=a
 def find_best_transactions():
     """
     Sorts mempool and then finds the transactions with the highest fee
@@ -164,20 +167,49 @@ def find_best_transactions():
         total_bytes_used+=a[1]['size']
     return transactions_used
 def get_merkel_root(transactions):
+    """
+    Returns the merkel root of all the provided transactions.
+    """
     mt = merkletools.MerkleTools(hash_type="sha3_256")
     for a in transactions:
         mt.add_leaf(a['hash'])
-    print(mt.get_leaf_count())
     mt.make_tree()
     return mt.get_merkle_root()
+
 def calculate_new_difficulty(old_target,old_time_mined,new_time_mined):
+    """
+    Calculates the new mining difficulty.
+    """
     time_diff=new_time_mined-old_time_mined
     ratio=float(time_diff)/float(Config.expected_time)
-    if ratio>4:
-        ratio=4
-    print(ratio)
-    new_target=round(int(old_target,16)*ratio)
-    new_target =(math.floor(math.log(new_target, 256)) + 1) * 0x1000000
-    print(new_target)
-    return str(hex(new_target))
-print(calculate_new_difficulty("0000f00000000000000000000000000000000000000000000000000000000000",100000,2000000))
+    if ratio>5:
+        ratio=5
+    if ratio<0.0001:
+        ratio=0.0001
+    new_target=str(hex(round(int(old_target,16)*ratio)))[2:]
+    missing=64-len(new_target)
+    new_target=("0"*missing)+new_target
+    return new_target
+def validate_block(block_hash,nonce,found_by,mined_at):
+    block_hash_int=int(block_hash,16)
+    block_target=int(block['header']['target'],16)
+    if not block_hash_int<=block_target:
+        return "BAD_BLOCK_HASH"
+    
+    return 0
+def get_mempool():
+    """
+    Returns the variable mempool
+    """
+    return mempool
+def give_job():
+    txhashes=[]
+    for a in block['body']['transactions']:
+        txhashes.append(a['hash'])        
+    job={"txdata":txhashes,"blockheaders":block['header']}
+    return job
+tx=coinbase_transaction(100,"grant")
+tx2=coinbase_transaction(1000,"asdfasdfasdf")
+add_transaction_to_block(tx)
+add_transaction_to_block(tx2)
+block['header']['merkleRoot']=get_merkel_root([tx,tx2])

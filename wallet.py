@@ -39,7 +39,7 @@ class Wallet:
         """
         key=self.private_key[2:]
         verifying_key=ecdsa.SigningKey.from_string(key,curve=Config.ecdsaCurve,hashfunc=Config.hashingAlgo).verifying_key
-        print(codecs.encode(ecdsa.SigningKey.from_string(key,curve=Config.ecdsaCurve,hashfunc=Config.hashingAlgo).sign("103fcc143105ba838f06da93375c741bd5c5d97ca836feb8f10b3e7f27b5d66649c6c6aa46ca6d806af8fb109e9882e7c9afe950a37fd44c85357904a12896961ee0xWsMNc3qwQA3ifTuBSUxsNtYXvQFvguKJL11".encode()),"hex"))
+        print(codecs.encode(ecdsa.SigningKey.from_string(key,curve=Config.ecdsaCurve,hashfunc=Config.hashingAlgo).sign("103fcc143105ba838f06da93375c741bd5c5d97ca836feb8f10b3e7f27b5d66649c6c6aa46ca6d806af8fb109e9882e7c9afe950a37fd44c85357904a12896961ee1100xWsMNc3qwQA3ifTuBSUxsNtYXvQFvguKJL120101682133575.0096".encode()),"hex"))
         print(verifying_key.to_string())
         public_key=codecs.decode((Config.pub_key_bytes+codecs.encode(verifying_key.to_string(),"hex").decode()).encode(),"hex")
         print(Config.pub_key_bytes+codecs.encode(verifying_key.to_string(),"hex").decode())
