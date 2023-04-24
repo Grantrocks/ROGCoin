@@ -29,3 +29,4 @@ while True:
                 elif data['command']=="FOUND_BLOCK":
                     blockchain.validate_block(block_hash=data['hash'],found_by=data['address'],nonce=data['nonce'])
                     conn.send(json.dumps({'command':"GOOD"}).encode())
+        pass

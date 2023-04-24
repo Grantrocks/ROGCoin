@@ -51,6 +51,7 @@ block['footer']['minedAt']=0
 def evaluate_target(new_time):
     blocks_len=len(os.listdir("blockchain"))
     remainder=blocks_len%20
+    print(remainder)
     if remainder==0:
         if blocks_len>=20:
             with open(f"blockchain/block{blocks_len-20}.json") as f:
@@ -65,10 +66,11 @@ def evaluate_target(new_time):
         return new_diff
     else:
         print("CRITERIA NOT MET")
-        return latestb['header']['target']
-blockch_len=os.listdir("blockchain")
-if len(blockch_len)>=20:
-    block['header']['target']=evaluate_target(latestb['footer']['minedAt'])
+        with open(f"blockchain/block{blocks_len-1}.json") as f:
+            temp=json.load(f)
+        return temp['header']['target']
+block['header']['target']=evaluate_target(latestb['footer']['minedAt'])
+
 def get_balance(address,start_block=0):
     """
     Scans the blockchain from the specified block or 0 and totals balance
