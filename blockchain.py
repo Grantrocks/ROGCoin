@@ -6,8 +6,7 @@ import ecdsa
 import base58
 import binascii
 import os
-import math
-import struct
+
 # External imports
 import merkletools
 
@@ -23,14 +22,31 @@ class Config:
     max_bytes=2000000
     expected_time=100*5*60
 block_template={
-        "header":{"lastBlockHash":"","created":round(time.time(),2),"fees":0,"merkleRoot":"","version":Config.VERSION,"target":"00f0000000000000000000000000000000000000000000000000000000000000","nonce":0,"hash":"","next_block_hash":"","weight":0},
+        "header":{"height":0,"lastBlockHash":"","created":round(time.time(),2),"fees":0,"merkleRoot":"","version":Config.VERSION,"target":"0000f00000000000000000000000000000000000000000000000000000000000","nonce":0,"hash":"","weight":0},
         "body":{"transactions":[],"totalSent":0,"totalTransactions":0},
-        "footer":{"minedBy":"","minedAt":0,"timeDifference":""}# Going to contain information about the blocks miner.
+        "footer":{"minedBy":"","minedAt":0}# Going to contain information about the blocks miner.
         }
 # VARIABLES
 mempool={}
-block=block_template
-
+blocksfiles=os.listdir("blockchain")
+with open("blockchain/"+blocksfiles[-1]) as f:
+    latestb=json.load(f)
+block=latestb
+blockch_len=os.listdir("blockchain")
+block['header']['height']=len(blockch_len)
+block['header']['created']=round(time.time(),2)
+block['header']['lastBlockHash']=block['header']['hash']
+block['header']['hash']=""
+block['header']['fees']=0
+block['header']['merkleRoot']=""
+block['header']['version']=Config.VERSION
+block['header']['nonce']=0
+block['header']['weight']=0
+block['body']['transactions']=[]
+block['body']['totalSent']=0
+block['body']['totalTransactions']=0
+block['footer']['minedBy']=""
+block['footer']['minedAt']=0
 # Functions
 
 def get_balance(address,start_block=0):
@@ -160,11 +176,18 @@ def find_best_transactions():
     total_bytes_used=0
     high_fee = sorted(mempool.items(), key=lambda item:item[1]['fee'],reverse=True)
     transactions_used=[]
+    for a in mempool:
+        tx=mempool[a]
+        if tx['coinbase']:
+            transactions_used.append(tx)
+            total_bytes_used+=tx['size']
+            break
     for a in high_fee:
         if total_bytes_used+a[1]['size']>=Config.max_bytes:
             break
         transactions_used.append(a[1])
         total_bytes_used+=a[1]['size']
+    block['header']['merkleRoot']=get_merkel_root(transactions_used)
     return transactions_used
 def get_merkel_root(transactions):
     """
@@ -190,13 +213,74 @@ def calculate_new_difficulty(old_target,old_time_mined,new_time_mined):
     missing=64-len(new_target)
     new_target=("0"*missing)+new_target
     return new_target
-def validate_block(block_hash,nonce,found_by,mined_at):
+def add_block():
+    """with open(f"blockchain/block{block['header']['height']-1}.json") as f:
+        last_block=json.load(f)
+    if last_block['header']['height']!=0:
+        block['header']['lastBlockHash']=last_block['header']['hash']
+    else:"""
+    block['header']['lastBlockHash']="Im sitting here in my homeroom class at highschool programming my blockchain. Im 16 as of now and im having a good time."
+    with open(f"blockchain/block{block['header']['height']}.json","w") as f:
+        json.dump(block,f)
+    blockch_len=os.listdir("blockchain")
+    if len(blockch_len)>=200:
+        if len(blockch_len)%200:
+            block['header']['target']=evaluate_target(block['footer']['minedAt'])
+    block['header']['height']=len(blockch_len)
+    block['header']['created']=round(time.time(),2)
+    block['header']['lastBlockHash']=block['header']['hash']
+    block['header']['hash']=""
+    block['header']['fees']=0
+    block['header']['merkleRoot']=""
+    block['header']['version']=Config.VERSION
+    block['header']['nonce']=0
+    block['header']['weight']=0
+    block['body']['transactions']=[]
+    block['body']['totalSent']=0
+    block['body']['totalTransactions']=0
+    block['footer']['minedBy']=""
+    block['footer']['minedAt']=0
+    print(block)
+def validate_block(block_hash,nonce,found_by):
     block_hash_int=int(block_hash,16)
     block_target=int(block['header']['target'],16)
     if not block_hash_int<=block_target:
-        return "BAD_BLOCK_HASH"
-    
-    return 0
+        return "BLOCK_HASH_NOT_IN_TARGET"
+    txhashes=""
+    job=give_job()
+    for a in job['txdata']:
+        txhashes+=a
+    datastring=f"{job['blockheaders']['lastBlockHash']}{job['blockheaders']['created']}{job['blockheaders']['merkleRoot']}{job['blockheaders']['version']}{txhashes}{nonce}"
+    check_block_hash=hashlib.sha3_256(hashlib.sha3_256(datastring.encode()).digest()).hexdigest()
+    if not block_hash==check_block_hash:
+        return "BLOCK_HASH_MISMATCH"
+    block['header']['nonce']=nonce
+    block['header']['hash']=block_hash
+    fee_total=0
+    total_transactions=0
+    transaction_amount_total=0
+    total_weight=0
+    updated_txs=[]
+    for a in block['body']['transactions']:
+        fee_total+=a['fee']
+        transaction_amount_total+=a['total']
+        total_transactions+=1
+        total_weight+=a['weight']
+        a['in_active_chain']=True
+        a['blocktime']=block['header']['created']
+        a['blockhash']=block['header']['hash']
+        updated_txs.append(a)
+    block['body']['transactions']=updated_txs
+    block['body']['totalSent']=transaction_amount_total
+    block['body']['totalTransactions']=total_transactions
+    block["header"]['weight']=total_weight
+    block['footer']['minedBy']=found_by
+    block['header']['fees']=fee_total
+    block['footer']['minedAt']=round(time.time(),2)
+    add_block()
+    reward=coinbase_transaction(Config.block_reward,found_by)
+    dump_to_mempool([reward])
+    return block
 def get_mempool():
     """
     Returns the variable mempool
@@ -204,12 +288,26 @@ def get_mempool():
     return mempool
 def give_job():
     txhashes=[]
+    fill_block()
     for a in block['body']['transactions']:
         txhashes.append(a['hash'])        
-    job={"txdata":txhashes,"blockheaders":block['header']}
+    job={"command":"JOB","txdata":txhashes,"blockheaders":block['header']}
     return job
-tx=coinbase_transaction(100,"grant")
-tx2=coinbase_transaction(1000,"asdfasdfasdf")
-add_transaction_to_block(tx)
-add_transaction_to_block(tx2)
-block['header']['merkleRoot']=get_merkel_root([tx,tx2])
+def fill_block():
+    transactions=find_best_transactions()
+    block['body']['transactions']=transactions
+def evaluate_target(new_time):
+    blocks_len=len(os.listdir("blockchain"))
+    remainder=blocks_len%200
+    print(remainder)
+    if remainder==0:
+        if blocks_len>=200:
+            with open(f"blockchain/block{blocks_len-200}.json") as f:
+                thb=json.load(f)
+        else:
+            with open(f"blockchain/block0.json") as f:
+                thb=json.load(f)
+        old_time=thb['footer']['minedAt']
+        old_target=thb['header']['target']
+        new_diff=calculate_new_difficulty(old_target=old_target,old_time_mined=old_time,new_time_mined=new_time)
+        return new_diff

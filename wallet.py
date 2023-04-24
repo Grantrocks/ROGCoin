@@ -115,7 +115,7 @@ def open_wallet(NAME,PASSWORD):
     return private_key
 
 NAME="GrantsWallet"
-PASSWORD="Grantrock1!".encode()
+PASSWORD="!".encode()
 
 #create_wallet(NAME,PASSWORD)
 private_key=open_wallet(NAME,PASSWORD)
