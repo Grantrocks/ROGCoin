@@ -1,4 +1,4 @@
 ecdsa
 cryptography
 filelock
-base58
+base58base58
