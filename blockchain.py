@@ -20,7 +20,7 @@ class Config:
     coinbase_mature_len=20
     block_reward=10
     max_bytes=2000000
-    expected_time=100*5*60
+    expected_time=20*5*60
 block_template={
         "header":{"height":0,"lastBlockHash":"","created":round(time.time(),2),"fees":0,"merkleRoot":"","version":Config.VERSION,"target":"0000f00000000000000000000000000000000000000000000000000000000000","nonce":0,"hash":"","weight":0},
         "body":{"transactions":[],"totalSent":0,"totalTransactions":0},
@@ -48,7 +48,27 @@ block['body']['totalTransactions']=0
 block['footer']['minedBy']=""
 block['footer']['minedAt']=0
 # Functions
-
+def evaluate_target(new_time):
+    blocks_len=len(os.listdir("blockchain"))
+    remainder=blocks_len%20
+    if remainder==0:
+        if blocks_len>=20:
+            with open(f"blockchain/block{blocks_len-20}.json") as f:
+                thb=json.load(f)
+        else:
+            with open(f"blockchain/block0.json") as f:
+                thb=json.load(f)
+        old_time=thb['footer']['minedAt']
+        old_target=thb['header']['target']
+        new_diff=calculate_new_difficulty(old_target=old_target,old_time_mined=old_time,new_time_mined=new_time)
+        print(new_diff)
+        return new_diff
+    else:
+        print("CRITERIA NOT MET")
+        return latestb['header']['target']
+blockch_len=os.listdir("blockchain")
+if len(blockch_len)>=20:
+    block['header']['target']=evaluate_target(latestb['footer']['minedAt'])
 def get_balance(address,start_block=0):
     """
     Scans the blockchain from the specified block or 0 and totals balance
@@ -133,8 +153,8 @@ def coinbase_transaction(amount,to):
     """
     Transactions made by the coinbase. No auth needed.
     """
-    timestamp=time.time()
-    data=f"{Config.VERSION}0{amount}Coinbase{to}0"
+    timestamp=round(time.time(),2)
+    data=f"{Config.VERSION}0{amount}Coinbase{to}0{timestamp}"
     tx_hash=hashlib.sha3_256(hashlib.sha3_256(hashlib.sha3_256(data.encode()).digest()).digest()).hexdigest()
     total=0+amount
     transaction={
@@ -176,18 +196,17 @@ def find_best_transactions():
     total_bytes_used=0
     high_fee = sorted(mempool.items(), key=lambda item:item[1]['fee'],reverse=True)
     transactions_used=[]
-    for a in mempool:
-        tx=mempool[a]
-        if tx['coinbase']:
-            transactions_used.append(tx)
-            total_bytes_used+=tx['size']
-            break
     for a in high_fee:
         if total_bytes_used+a[1]['size']>=Config.max_bytes:
             break
         transactions_used.append(a[1])
         total_bytes_used+=a[1]['size']
-    block['header']['merkleRoot']=get_merkel_root(transactions_used)
+    if len(transactions_used)>=2:
+        block['header']['merkleRoot']=get_merkel_root(transactions_used)
+    else:
+        block['header']['merkleRoot']=transactions_used[0]['hash']
+    for a in transactions_used:
+        del mempool[a['hash']]
     return transactions_used
 def get_merkel_root(transactions):
     """
@@ -214,18 +233,17 @@ def calculate_new_difficulty(old_target,old_time_mined,new_time_mined):
     new_target=("0"*missing)+new_target
     return new_target
 def add_block():
-    """with open(f"blockchain/block{block['header']['height']-1}.json") as f:
+    with open(f"blockchain/block{block['header']['height']-1}.json") as f:
         last_block=json.load(f)
-    if last_block['header']['height']!=0:
-        block['header']['lastBlockHash']=last_block['header']['hash']
-    else:"""
-    block['header']['lastBlockHash']="Im sitting here in my homeroom class at highschool programming my blockchain. Im 16 as of now and im having a good time."
+    block['header']['lastBlockHash']=last_block['header']['hash']
     with open(f"blockchain/block{block['header']['height']}.json","w") as f:
         json.dump(block,f)
     blockch_len=os.listdir("blockchain")
-    if len(blockch_len)>=200:
-        if len(blockch_len)%200:
+    if len(blockch_len)>=20:
+        if len(blockch_len)%20==0:
             block['header']['target']=evaluate_target(block['footer']['minedAt'])
+    finder=block['footer']['minedBy']
+    lbfees=block['header']['fees']
     block['header']['height']=len(blockch_len)
     block['header']['created']=round(time.time(),2)
     block['header']['lastBlockHash']=block['header']['hash']
@@ -240,8 +258,10 @@ def add_block():
     block['body']['totalTransactions']=0
     block['footer']['minedBy']=""
     block['footer']['minedAt']=0
-    print(block)
+    fill_block(finder,lbfees)
+    return block
 def validate_block(block_hash,nonce,found_by):
+    print(block_hash)
     block_hash_int=int(block_hash,16)
     block_target=int(block['header']['target'],16)
     if not block_hash_int<=block_target:
@@ -254,8 +274,7 @@ def validate_block(block_hash,nonce,found_by):
     check_block_hash=hashlib.sha3_256(hashlib.sha3_256(datastring.encode()).digest()).hexdigest()
     if not block_hash==check_block_hash:
         return "BLOCK_HASH_MISMATCH"
-    block['header']['nonce']=nonce
-    block['header']['hash']=block_hash
+    coinbase_transaction_count=0
     fee_total=0
     total_transactions=0
     transaction_amount_total=0
@@ -269,7 +288,13 @@ def validate_block(block_hash,nonce,found_by):
         a['in_active_chain']=True
         a['blocktime']=block['header']['created']
         a['blockhash']=block['header']['hash']
+        if a['coinbase']:
+            coinbase_transaction_count+=1
         updated_txs.append(a)
+    if coinbase_transaction_count!=1:
+        return "INVALID_COINBASE_TX_AMOUNT"
+    block['header']['nonce']=nonce
+    block['header']['hash']=block_hash
     block['body']['transactions']=updated_txs
     block['body']['totalSent']=transaction_amount_total
     block['body']['totalTransactions']=total_transactions
@@ -278,8 +303,6 @@ def validate_block(block_hash,nonce,found_by):
     block['header']['fees']=fee_total
     block['footer']['minedAt']=round(time.time(),2)
     add_block()
-    reward=coinbase_transaction(Config.block_reward,found_by)
-    dump_to_mempool([reward])
     return block
 def get_mempool():
     """
@@ -288,26 +311,14 @@ def get_mempool():
     return mempool
 def give_job():
     txhashes=[]
-    fill_block()
     for a in block['body']['transactions']:
         txhashes.append(a['hash'])        
     job={"command":"JOB","txdata":txhashes,"blockheaders":block['header']}
     return job
-def fill_block():
+def fill_block(foundby,lbfees):
+    dump_to_mempool([coinbase_transaction((Config.block_reward*1000000000)+lbfees,foundby)])
     transactions=find_best_transactions()
     block['body']['transactions']=transactions
-def evaluate_target(new_time):
-    blocks_len=len(os.listdir("blockchain"))
-    remainder=blocks_len%200
-    print(remainder)
-    if remainder==0:
-        if blocks_len>=200:
-            with open(f"blockchain/block{blocks_len-200}.json") as f:
-                thb=json.load(f)
-        else:
-            with open(f"blockchain/block0.json") as f:
-                thb=json.load(f)
-        old_time=thb['footer']['minedAt']
-        old_target=thb['header']['target']
-        new_diff=calculate_new_difficulty(old_target=old_target,old_time_mined=old_time,new_time_mined=new_time)
-        return new_diff
+
+fill_block(foundby="xWsMNc3qwQA3ifTuBSUxsNtYXvQFvguKJL",lbfees=0)
+print(block)
