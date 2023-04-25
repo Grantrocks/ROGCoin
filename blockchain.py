@@ -323,4 +323,3 @@ def fill_block(foundby,lbfees):
     block['body']['transactions']=transactions
 
 fill_block(foundby="xWsMNc3qwQA3ifTuBSUxsNtYXvQFvguKJL",lbfees=0)
-print(block)
