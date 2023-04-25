@@ -78,14 +78,17 @@ def get_balance(address,start_block=0):
     blocks=os.listdir("blockchain")
     balance=0
     for a in range(start_block,len(blocks)):
-        file=f"b{a}.json"
+        file=f"blockchain/block{a}.json"
         with open(file) as f:
             block_d=json.load(f)
         for transaction in block_d['body']['transactions']:
             if transaction['in']['address']==address:
                 balance-=transaction['total']
             elif transaction['out']['address']==address:
-                balance+=transaction['out']['value']
+                if transaction['coinbase'] and (len(blocks)+Config.coinbase_mature_len)>=block_d['header']['height']:
+                    balance+=transaction['out']['value']
+                else:    
+                    balance+=transaction['out']['value']
     return balance
 
 def create_client_transaction(sender,receiver,scriptSig,amount,fee,rtime):
@@ -124,6 +127,8 @@ def create_client_transaction(sender,receiver,scriptSig,amount,fee,rtime):
     
     fee=fee+(len(data)*2)
     total=fee+amount
+    if not get_balance(sender)>=total:
+        return "BALANCE_TO_LOW"
 
 
 
@@ -305,12 +310,26 @@ def validate_block(block_hash,nonce,found_by):
     block['header']['fees']=fee_total
     block['footer']['minedAt']=round(time.time(),2)
     add_block()
+    add_confirmations(block['header']['height'])
     return block
 def get_mempool():
     """
     Returns the variable mempool
     """
     return mempool
+def add_confirmations(blocknum):
+    for a in range(blocknum):
+        if a==blocknum:
+            break
+        with open(f"blockchain/block{a}.json") as f:
+            block_t=json.load(f)
+        updataed=[]
+        for t in block_t['body']['transactions']:
+            t['confirmations']+=1
+            updataed.append(updataed)
+        block_t['body']['transactions']=updataed
+        with open(f"blockchain/block{a}.json","w") as f:
+            json.dump(block_t,f)
 def give_job():
     txhashes=[]
     for a in block['body']['transactions']:
@@ -321,5 +340,7 @@ def fill_block(foundby,lbfees):
     dump_to_mempool([coinbase_transaction((Config.block_reward*1000000000)+lbfees,foundby)])
     transactions=find_best_transactions()
     block['body']['transactions']=transactions
+
+
 
 fill_block(foundby="xWsMNc3qwQA3ifTuBSUxsNtYXvQFvguKJL",lbfees=0)

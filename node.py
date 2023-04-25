@@ -3,7 +3,7 @@ import time
 import hashlib
 import json
 HOST="0.0.0.0"
-PORT=10027
+PORT=10000
 """
 if data['command']=="GET_JOB":
     conn.send(json.dumps(blockchain.give_job()).encode())
@@ -27,11 +27,14 @@ async def handle_client(reader, writer):
             blockchain.validate_block(block_hash=data['hash'],found_by=data['address'],nonce=data['nonce'])
             writer.write(json.dumps({'command':"GOOD"}).encode())
             break
+        elif data['command']=="GET_BALANCE":
+            writer.write(json.dumps({"command":"BALANCE","value":blockchain.get_balance(data['address'])}).encode())
+            break
         await writer.drain()
     writer.close()
 
 async def run_server():
-    server = await asyncio.start_server(handle_client, 'localhost', 15555)
+    server = await asyncio.start_server(handle_client, '0.0.0.0', 10000)
     async with server:
         await server.serve_forever()
 

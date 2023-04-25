@@ -69,8 +69,9 @@ class ClientConnection:
         """
         Sends JSON data and returns the response from the node.
         """
-        self.socket.send(jdata)
-        return self.socket.recv(1024)
+        self.socket.send(json.dumps(jdata).encode())
+        return self.socket.recv(1024).decode()
+print(ClientConnection("0.0.0.0",10000).send({"command":"GET_BALANCE","address":"xWsMNc3qwQA3ifTuBSUxsNtYXvQFvguKJL"}))
 def generate_key():
     """
         Generate a secure,random, key
@@ -115,7 +116,7 @@ def open_wallet(NAME,PASSWORD):
     return private_key
 
 NAME="GrantsWallet"
-PASSWORD="!".encode()
+PASSWORD="Grantrock1!".encode()
 
 #create_wallet(NAME,PASSWORD)
 private_key=open_wallet(NAME,PASSWORD)
